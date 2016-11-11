@@ -1,0 +1,2 @@
+# AssetBundle
+关于Unity5.4 AssetBundle的最后一篇博文中，我把自己学习过程中遇到的坑和解决方法分享给大家，望广大学习者能够尽快掌握Assetbundle。
