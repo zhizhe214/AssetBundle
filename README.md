@@ -1,2 +1,13 @@
 # AssetBundle
 关于Unity5.4 AssetBundle的最后一篇博文中，我把自己学习过程中遇到的坑和解决方法分享给大家，望广大学习者能够尽快掌握Assetbundle。
+
+    1、首先说明一下，Unity5.x以后的打包流程跟Unity4.x的版本完全不一样了，Unity4.x版本打包时需要先获取打包的对象或资源，然后针对资源进行打包操作，而且有依赖资源的时候需要用特定的方法来打包依赖资源，操作比较麻烦，而Unity5.x版本只需设置资源的AssetBundle的名称，Unity编辑器会把设置了AssetBundle名称的资源和对象自动处理为打包的资源，实际上它的信息已自动存储在了AssetDataBase里面，所以在打包的时候只需要调用BuildPipeline.BuildAssetBundles方法即可，这个函数有5个重载，大家可以到官方文档查看每个重载的使用。这里提醒，这个方法会把在AssetDataBase里面的所有资源（即设置了AssetBundle名称的资源）先计算出依赖关系，然后在拆分打包，这个过程是Unity自动完成的。
+    2、自动设置AssetBundle名称：只要资源设置了AssetBundle名称，BuildPipeline.BuildAssetBundles函数就可以将此资源打包。但是如果一个模型Model带有一个材质Mat，只把Model设置了AssetBundle名称，打包时Mat将会被一起打包到Model的资源包中，这就产生了一个问题，如果多个模型公用一个Mat，那么Mat就会被重复打包进多个资源中，因此建议将公用的资源（材质、贴图等等）全部设置AssetBundle名称，从而进行分开打包，而模型单独使用的资源可以打包到一起。那么涉及到如果项目有几百甚至更多的资源需要打包的话，手动设置AssetBundle名称会太费时，因此可以将打包的资源放置在一个文件夹中，然后通过AssetDatabase.GetDependencies()函数来获取某个模型的依赖资源、AssetImporter.GetAtPath()获取资源的打包信息、AssetDatabase.AssetPathToGUID()来获取资源的哈希ID，然后调用AssetImporter.assetBundleName属性，用资源的哈希ID设置依赖资源的AssetBundle名称，最后再分离打包。注意：打包前一定要将AssetBundle的名称先清以下，防止重复打包。（具体的实现方法可以参考我下面提供的项目源码）
+    3、路径问题：（我在这个坑中爬了好久……）首先大家都知道WWW类加载本地路径的话，是根据全路径加载的，而AssetDatabase.GetDependencies(path)和AssetImporter.GetAtPath(path)函数中path表示的是相对Unity工程的相对路径，即开头是“Assets/..”。（我找到路径问题后才顺利的完成所有打包过程，可能还有其他函数的路径也是这个，我没有再去找……）
+    4、大小写问题：资源设置的AssetBundle名称是自动设置为小写的，也就是说打包出来的资源包名称也是跟AssetBundle一样小写的，那么下载的时候一定要注意，也需要用小写名称来下载资源包，否则不能下载下来。而资源包中的资源名称是与打包时资源名称一致的，区分大小写，因此从资源包中加载资源的时候，需要确定资源的名称（区分大小写）。
+    5、资源的加载过程：Unity5以后的版本中打包AssetBundle时，会自动生成一个总的AssetBundleManifest文件（详解在Unity5.4 AssetBundle官方说明一），这个文件是跟打包的主目录文件夹名称一致，其中包含了所有的资源包信息，因此加载某一个资源包中时，需要先加载这个总的manifest文件，方法是先用WWW类加载这个文件，然后使用www.assetBundle.LoadAsset<AssetBundleManifest>("AssetBundleManifest")获取这个总的AssetBundleManifest（注意函数中的字符串参数是“AssetBundleManifest”）。接下来通过manifest.GetAllDependencies(objName)来获取objName对象的依赖资源信息，然后将所有依赖资源的资源包加载进来，最后才能将需要的obj资源完整的加载进来并使用（注意释放掉未使用的AssetBundle）。如果不加载依赖资源，获取的资源中会丢失依赖资源。（具体的实现方法可以参考我下面提供的项目源码）
+    6、资源的释放：加载完需要的资源后，切记要释放掉没用的资源，方法是AssetBundle.Unload(false)，其中false表示释放掉已加载却没有使用的资源，因为一个资源包中可能包含多个资源，而加载完资源包后里面的所有资源都被加载了，因此需要释放掉没用的资源。而如果是true的话，将会释放掉所有的资源，包括使用的资源。
+    7、使用资源：如果加载完AssetBundle后，创建模型对象使用的方法是bundle.LoadAsset<GameObject>(file)，而创建场景使用的方法是SceneManager.LoadScene(file)。（具体的实现方法可以参考我下面提供的项目源码）
+    8、近期发现了一个重要的问题，Unity5打包时，可以把烘培后的贴图进行打包，好像灯光烘培的数据LightingData不能打包成AssetBundle，虽然LightingData可以设置AssetBundle名称，但是打包时报异常。不知道是不是我设置的不对，后期我会再补充具体内容，希望有人发现了可以指点我一下。
+      最后我把整理的项目分享出来。希望大家多多指点，如果遇到其他坑或者有更好的思想，希望多多交流。祝大家学习愉快！项目中主要看DoAssetbundle.cs和DownloadAssetBundle.cs，而AssetBundleManager.cs是一个官方的管理器，很不错，我没有具体应用，大家可以看一下。
+    整合的项目源码地址：http://download.csdn.net/detail/u010377179/9647436
